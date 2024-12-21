@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 def Fη(p1, p2, x):
     sum = p1
     for k in range(1, x + 1):
-        sum += (1 - p1)**k * (1 - p2)**(k - 1) * p2
+        sum += (1 - p1)**k * (1 - p2)**(k - 1) * p2 + (1 - p1)**k * (1 - p2)**k * p1
     return sum
 
 
@@ -69,8 +69,10 @@ def main():
     
     
     # Теоретические Eη и Dη
-    Eη = (1 - p1) / (p1 + p2 - p1 * p2)
-    Dη = (1 - p1) * (1 - p2 + p1 * p2) / ((p1 + p2 - p1 * p2) ** 2)
+    q1 = 1 - p1
+    q2 = 1 - p2
+    Eη = (q1 * p2 + q1 * q2 * p1) / (1 - q1 * q2)**2  
+    Dη = ((q1 * p2 + q1 * q2 * p1) * (1 + q1 * q2) / (1 - q1 * q2)**3) - ((q1 * p2 + q1 * q2 * p1)**2 * 1 / (1 - q1*q2)** 4)
     
     #Выборочные характеристики
     x_bar = sum(results) / n
@@ -89,20 +91,27 @@ def main():
     print(table2)
 
 
-
+    # mP(η = k) = (1 - p1)^k * (1 - p2)^(k-1) * p2 + (1 - p1)^k * (1 - p2)^(k) * p1 
     # Вычисление теоретических вероятностей и отклонений
     theoretical_probs = {}
     for y in results:
         if y == 0:
             P_y = p1
         else:
-            P_y = (1 - p1)**y * (1 - p2)**(y - 1) * p2
+            P_y = (1 - p1)**y * (1 - p2)**(y - 1) * p2 + (1 - p1)**y * (1 - p2)**y * p1
         theoretical_probs[y] = P_y
 
     for y in results:
         list = []
         list.append(abs(freq[yi.index(y)] - theoretical_probs[y]))
     max_diff = max(list)
+
+    table3 = PrettyTable()
+    table3.field_names = ["yj", "P({η = yj})", "nj/n"]
+    for y in yi:
+        table3.add_row([y, theoretical_probs[y], freq[yi.index(y)]])
+    print(table3)
+
     print("Максимальное отклонение между теоретическими и выборочными вероятностями: %.3f" % max_diff)
 
 
@@ -122,7 +131,7 @@ def main():
     plt.step(x_values, Fη_b_values, where='post', label='Выборочная F̂η(x)', linestyle='--')
     plt.xlabel('x')
     plt.ylabel('F(x)')
-    plt.title('Функции распределения, D = %.3f' % D)
+    plt.title('Теор. и выб. ф-ии распределения, D = %.3f' % D)
     plt.legend()
     plt.grid(True)
     plt.show()
