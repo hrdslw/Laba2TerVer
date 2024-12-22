@@ -3,6 +3,7 @@ import numpy as np
 from collections import Counter
 from prettytable import PrettyTable
 from matplotlib import pyplot as plt
+from scipy.stats import chi2
 
 
 # Теоретическая функция распределения
@@ -71,15 +72,15 @@ def main():
     # Теоретические Eη и Dη
     q1 = 1 - p1
     q2 = 1 - p2
-    Eη = (q1 * p2 + q1 * q2 * p1) / (1 - q1 * q2)**2  
-    Dη = ((q1 * p2 + q1 * q2 * p1) * (1 + q1 * q2) / (1 - q1 * q2)**3) - ((q1 * p2 + q1 * q2 * p1)**2 * 1 / (1 - q1*q2)** 4)
+    Eη = (1 - p1) / (p1 + p2 - p1 * p2) 
+    Dη = (1 - p1) * (1 - p2 + p1 * p2) / ((p1 + p2 - p1 * p2) ** 2)
     
     #Выборочные характеристики
     x_bar = sum(results) / n
     S2 = sum([(xi - x_bar) ** 2 for xi in results]) / n
     R = max(results) - min(results)
     if n % 2 == 0:
-        Me_bar = (results[n // 2] + results[n // 2 + 1]) / 2 #TODO проверить правильность формулы для четного n 
+        Me_bar = (results[n // 2] + results[n // 2 + 1]) / 2 
     else:
         Me_bar = results[n // 2 + 1]
     Eη_diff = abs(Eη - x_bar)
@@ -91,7 +92,7 @@ def main():
     print(table2)
 
 
-    # mP(η = k) = (1 - p1)^k * (1 - p2)^(k-1) * p2 + (1 - p1)^k * (1 - p2)^(k) * p1 
+    # P(η = k) = (1 - p1)^k * (1 - p2)^(k-1) * p2 + (1 - p1)^k * (1 - p2)^(k) * p1 
     # Вычисление теоретических вероятностей и отклонений
     theoretical_probs = {}
     for y in results:
@@ -139,7 +140,108 @@ def main():
     
 
     # -------------------------------------------------------------------- 3 ЧАСТЬ ---------------------------------------------------------------------------------
+    print("\nЧасть 3. Проверка гипотезы о виде распределения при помощи критерия χ².")
+
+    # Ввод числа интервалов k
+    while True:
+        k = int(input("Введите число интервалов k для критерия χ²: "))
+        if k <= 1:
+            print("k должно быть > 1")
+            continue
+        break
+        
+
+    # Ввод границ интервалов: z_1, z_2, ..., z_(k-1)
+    # Интервалы: Δ1'' = (-&infin;, z_1], Δ2'' = (z_1, z_2], ..., Δk'' = (z_{k-1}, &infin;)
+    zs = []
+    if k > 1:
+        print(f"Введите {k-1} точек разделения интервалов в порядке возрастания:")
+    for i in range(k-1):
+        while True:
+            try:
+                z = float(input(f"z_{i+1} = "))
+                zs.append(z)
+                break
+            except ValueError:
+                print("Некорректный ввод. Введите число.")
+    zs.sort() # Сортировка границ интервалов
+
+    # Функция для определения в какой интервал попадает значение η
+    def interval_index(x_val):
+        # (-&infin;, z_1], (z_1, z_2], ..., (z_{k-1}, &infin;)
+        for j in range(k-1):
+            if x_val <= zs[j]:
+                return j
+        return k-1
+
+    # Подсчёт n_j
+    n_j = [0]*k
+    for val in results:
+        idx = interval_index(val)
+        n_j[idx] += 1
+
+    # Подсчёт q_j
+    # q_j = P(η &isin; Δj''), вычисляем суммированием вероятностей теоретического распределения
+    # Так как η - дискретная СВ, мы просто суммируем те p(y), для y попадающих в интервал.
+    def in_interval(y, j):
+        # Проверяем, попадает ли y в интервал j
+        if j == 0:
+            return y <= zs[0] if (k > 1) else True # Если k=1, тогда один интервал -&infin;,&infin;
+        elif j == k-1:
+            return y > zs[-1] if (k > 1) else True
+        else:
+            return (y > zs[j-1]) and (y <= zs[j])
+
+    q_j = [0]*k
+    for j in range(k):
+        q_j[j] = sum(theoretical_probs[y] for y in theoretical_probs if in_interval(y, j))
+
+    print(q_j)
+    # Проверка, что q_j > 0 для всех j
+    # Если какой-то интервал теоретически имеет нулевую вероятность, нужно объединять интервалы,
+    # но для простоты здесь предполагается, что этого не будет.
+    for j in range(k):
+        if q_j[j] == 0:
+            print("Внимание! Один из интервалов имеет нулевую теоретическую вероятность. Пересмотрите границы.")
+            return
+
+    # Вычисление статистики R_0
+    R0 = sum(((n_j[j] - n*q_j[j])**2)/(n*q_j[j]) for j in range(k))
+    #гипотеза - распределение не совпадает с тем, что ты вычисляешь
+    # Ввод уровня значимости α
+    while True:
+        try:
+            alpha = float(input("Введите уровень значимости α (например, 0.05): "))
+            if alpha <= 0 or alpha >= 1:
+                print("α должно быть в (0,1).")
+                continue
+            break
+        except ValueError:
+            print("Некорректный ввод. Введите число от 0 до 1.")
+
+    # Для χ²-критерия:
+    # Число степеней свободы: r = k - 1
+    r = k - 1
     
+    # Рассчитаем p-value = P(R_0_случайная &le; R_0_наблюдаемое) при H_0
+    # p-value = Fχ²_r(R0), где Fχ²_r - функция распределения χ² с r степенями свободы
+    p_value = chi2.cdf(R0, r)
+
+    # Вывод результатов проверки гипотезы
+    print("\nПроверка гипотезы χ²:")
+    print(f"Число интервалов k = {k}")
+    print(f"Границы интервалов: {zs}")
+    print("q_j:", q_j)
+    print("n_j:", n_j)
+    print(f"Статистика R_0 = {R0:.4f}")
+    print(f"p-value = {p_value:.4f}")
+
+    # Решение: отвергаем H_0, если p-value < α
+    if p_value < alpha:
+        print(f"p-value < α ({p_value:.4f} < {alpha}), отвергаем гипотезу H_0.")
+    else:
+        print(f"p-value &ge; α ({p_value:.4f} &ge; {alpha}), нет оснований отвергать гипотезу H_0.")
+
 
 
 
