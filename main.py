@@ -128,19 +128,22 @@ def main():
         d_values.append(max(j / n - Fη(p1, p2, results[j - 1]), Fη(p1, p2, results[j - 1]) - (j - 1) / n))
     D = max(d_values)
     # Построение графиков
-    plt.step(x_values, Fη_values, where='post', label='Теоретическая Fη(x)')
-    plt.step(x_values, Fη_b_values, where='post', label='Выборочная F̂η(x)', linestyle='--')
-    plt.xlabel('x')
-    plt.ylabel('F(x)')
-    plt.title('Теор. и выб. ф-ии распределения, D = %.3f' % D)
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
+    print("Рисовать график? y = 1, n = 0")
+    if int(input()) == 1:
+        plt.step(x_values, Fη_values, where='post', label='Теоретическая Fη(x)')
+        plt.step(x_values, Fη_b_values, where='post', label='Выборочная F̂η(x)', linestyle='--')
+        plt.xlabel('x')
+        plt.ylabel('F(x)')
+        plt.title('Теор. и выб. ф-ии распределения, D = %.3f' % D)
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+    else:
+        print("График не отображен")
     
 
     # -------------------------------------------------------------------- 3 ЧАСТЬ ---------------------------------------------------------------------------------
-    print("\nЧасть 3. Проверка гипотезы о виде распределения при помощи критерия χ².")
+
 
     # Ввод числа интервалов k
     while True:
@@ -152,37 +155,33 @@ def main():
         
 
     # Ввод границ интервалов: z_1, z_2, ..., z_(k-1)
-    # Интервалы: Δ1'' = (-&infin;, z_1], Δ2'' = (z_1, z_2], ..., Δk'' = (z_{k-1}, &infin;)
+    # Интервалы: Δ1'' = (-inf, z_1), Δ2'' = [z_1, z_2), ..., Δk'' = (z_[k-1], inf)
     zs = []
     if k > 1:
-        print(f"Введите {k-1} точек разделения интервалов в порядке возрастания:")
-    for i in range(k-1):
-        while True:
-            try:
-                z = float(input(f"z_{i+1} = "))
-                zs.append(z)
-                break
-            except ValueError:
-                print("Некорректный ввод. Введите число.")
-    zs.sort() # Сортировка границ интервалов
+        print(f"Введите {k - 1} точек разделения интервалов в порядке возрастания:")
+    for i in range(k - 1):
+        z = float(input(f"z_{i + 1} = "))
+        zs.append(z)
+
+    zs.sort() 
 
     # Функция для определения в какой интервал попадает значение η
     def interval_index(x_val):
-        # (-&infin;, z_1], (z_1, z_2], ..., (z_{k-1}, &infin;)
-        for j in range(k-1):
+        # (-inf, z_1), [z_1, z_2), ..., (z_[k-1], inf)
+        for j in range(k - 1):
             if x_val <= zs[j]:
                 return j
         return k-1
 
-    # Подсчёт n_j
-    n_j = [0]*k
+    # Подсчёт nj
+    nj = np.zeros(k)
     for val in results:
         idx = interval_index(val)
-        n_j[idx] += 1
+        nj[idx] += 1
 
-    # Подсчёт q_j
-    # q_j = P(η &isin; Δj''), вычисляем суммированием вероятностей теоретического распределения
-    # Так как η - дискретная СВ, мы просто суммируем те p(y), для y попадающих в интервал.
+    # Подсчёт qj
+    # qj = P(η c Δj''), вычисляем суммированием вероятностей теоретического распределения
+    # Так как η - дискретная с.в., мы просто суммируем те P(y), для y попадающих в интервал.
     def in_interval(y, j):
         # Проверяем, попадает ли y в интервал j
         if j == 0:
@@ -190,40 +189,31 @@ def main():
         elif j == k-1:
             return y > zs[-1] if (k > 1) else True
         else:
-            return (y > zs[j-1]) and (y <= zs[j])
+            return (y > zs[j - 1]) and (y <= zs[j])
 
-    q_j = [0]*k
+    qj = np.zeros(k)
     for j in range(k):
-        q_j[j] = sum(theoretical_probs[y] for y in theoretical_probs if in_interval(y, j))
-
-    print(q_j)
-    # Проверка, что q_j > 0 для всех j
-    # Если какой-то интервал теоретически имеет нулевую вероятность, нужно объединять интервалы,
-    # но для простоты здесь предполагается, что этого не будет.
-    for j in range(k):
-        if q_j[j] == 0:
-            print("Внимание! Один из интервалов имеет нулевую теоретическую вероятность. Пересмотрите границы.")
-            return
+        qj[j] = sum(theoretical_probs[y] for y in theoretical_probs if in_interval(y, j))
 
     # Вычисление статистики R_0
-    R0 = sum(((n_j[j] - n*q_j[j])**2)/(n*q_j[j]) for j in range(k))
-    #гипотеза - распределение не совпадает с тем, что ты вычисляешь
+    R0 = sum(((nj[j] - n * qj[j])**2) / (n * qj[j]) for j in range(k))
+
+    #гипотеза - распределение не совпадает с тем, что мы вычисляем
     # Ввод уровня значимости α
     while True:
         try:
-            alpha = float(input("Введите уровень значимости α (например, 0.05): "))
+            alpha = float(input("Введите уровень значимости α, 0 < α < 1: "))
             if alpha <= 0 or alpha >= 1:
                 print("α должно быть в (0,1).")
                 continue
             break
         except ValueError:
-            print("Некорректный ввод. Введите число от 0 до 1.")
+            print("Некорректный ввод")
 
     # Для χ²-критерия:
     # Число степеней свободы: r = k - 1
     r = k - 1
     
-    # Рассчитаем p-value = P(R_0_случайная &le; R_0_наблюдаемое) при H_0
     # p-value = Fχ²_r(R0), где Fχ²_r - функция распределения χ² с r степенями свободы
     p_value = chi2.cdf(R0, r)
 
@@ -231,16 +221,15 @@ def main():
     print("\nПроверка гипотезы χ²:")
     print(f"Число интервалов k = {k}")
     print(f"Границы интервалов: {zs}")
-    print("q_j:", q_j)
-    print("n_j:", n_j)
+    print("qj:", qj)
+    print("nj:", nj)
     print(f"Статистика R_0 = {R0:.4f}")
     print(f"p-value = {p_value:.4f}")
 
-    # Решение: отвергаем H_0, если p-value < α
     if p_value < alpha:
-        print(f"p-value < α ({p_value:.4f} < {alpha}), отвергаем гипотезу H_0.")
+        print(f"p-value < α, отвергаем гипотезу H_0.")
     else:
-        print(f"p-value &ge; α ({p_value:.4f} &ge; {alpha}), нет оснований отвергать гипотезу H_0.")
+        print(f"p-value >= α, нет оснований отвергать гипотезу H_0.")
 
 
 
