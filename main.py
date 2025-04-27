@@ -17,7 +17,7 @@ def Fη(p1, p2, x):
 def simulate_experiment(p1, p2, n):
     results = []
 
-    for _ in range(n):
+    for i in range(1, n + 1):
         y = 0
         while True:
 
@@ -44,6 +44,7 @@ def main():
     n = int(input("Введите количество экспериментов (n): "))
 
     results = simulate_experiment(p1, p2, n)
+
     results.sort()
     counter = Counter(results)
     yi = sorted(counter.keys())
@@ -70,19 +71,22 @@ def main():
     
     
     # Теоретические Eη и Dη
-    q1 = 1 - p1
-    q2 = 1 - p2
     Eη = (1 - p1) / (p1 + p2 - p1 * p2) 
     Dη = (1 - p1) * (1 - p2 + p1 * p2) / ((p1 + p2 - p1 * p2) ** 2)
     
     #Выборочные характеристики
     x_bar = sum(results) / n
+    print(n)
+    print(len(results))
     S2 = sum([(xi - x_bar) ** 2 for xi in results]) / n
     R = max(results) - min(results)
     if n % 2 == 0:
         Me_bar = (results[n // 2] + results[n // 2 + 1]) / 2 
     else:
-        Me_bar = results[n // 2 + 1]
+        if n // 2 == 0:
+            Me_bar = results[0]
+        else:
+            Me_bar = results[n // 2 + 1]
     Eη_diff = abs(Eη - x_bar)
     Dη_diff = abs(Dη - S2)
 
@@ -118,18 +122,17 @@ def main():
 
    
    # Теоретическая и выборочная функции распределения
-    x_values = np.arange(0, results[-1] + 1)
+    x_values = np.arange(0, results[-1] + 10)
     Fη_values = [Fη(p1, p2, x) for x in x_values]
     Fη_b_values = [len([xi for xi in results if xi <= x]) / n for x in x_values]
    
     # Вычисление меры расхождения между теоретической и выборочной функциями распределения
-    for j in range(1, n + 1):
-        d_values = []
-        d_values.append(max(j / n - Fη(p1, p2, results[j - 1]), Fη(p1, p2, results[j - 1]) - (j - 1) / n))
-    D = max(d_values)
+    D = max(abs(F - F_b) for F, F_b in zip(Fη_values, Fη_b_values))
+
     # Построение графиков
     print("Рисовать график? y = 1, n = 0")
     if int(input()) == 1:
+        plt.axhline(y = 0, color = 'black')
         plt.step(x_values, Fη_values, where='post', label='Теоретическая Fη(x)')
         plt.step(x_values, Fη_b_values, where='post', label='Выборочная F̂η(x)', linestyle='--')
         plt.xlabel('x')
@@ -145,7 +148,6 @@ def main():
     # -------------------------------------------------------------------- 3 ЧАСТЬ ---------------------------------------------------------------------------------
 
 
-    # Ввод числа интервалов k
     while True:
         k = int(input("Введите число интервалов k для критерия χ²: "))
         if k <= 1:
@@ -156,50 +158,44 @@ def main():
 
     # Ввод границ интервалов: z_1, z_2, ..., z_(k-1)
     # Интервалы: Δ1'' = (-inf, z_1), Δ2'' = [z_1, z_2), ..., Δk'' = (z_[k-1], inf)
-    zs = []
+    deltas = []
     if k > 1:
         print(f"Введите {k - 1} точек разделения интервалов в порядке возрастания:")
     for i in range(k - 1):
-        z = float(input(f"z_{i + 1} = "))
-        zs.append(z)
+        delta = float(input(f"delta_{i + 1} = "))
+        deltas.append(delta)
 
-    zs.sort() 
+    deltas.sort() 
 
     # Функция для определения в какой интервал попадает значение η
-    def interval_index(x_val):
-        # (-inf, z_1), [z_1, z_2), ..., (z_[k-1], inf)
+    def idx_of_interval(x_val):
         for j in range(k - 1):
-            if x_val <= zs[j]:
+            if x_val <= deltas[j]:
                 return j
         return k-1
 
     # Подсчёт nj
     nj = np.zeros(k)
     for val in results:
-        idx = interval_index(val)
+        idx = idx_of_interval(val)
         nj[idx] += 1
 
-    # Подсчёт qj
-    # qj = P(η c Δj''), вычисляем суммированием вероятностей теоретического распределения
-    # Так как η - дискретная с.в., мы просто суммируем те P(y), для y попадающих в интервал.
-    def in_interval(y, j):
-        # Проверяем, попадает ли y в интервал j
+
+    def at_delta(y, j):
         if j == 0:
-            return y <= zs[0] if (k > 1) else True # Если k=1, тогда один интервал -&infin;,&infin;
+            return y <= deltas[0] if (k > 1) else True # Если k=1, тогда один интервал -&infin;,&infin;
         elif j == k-1:
-            return y > zs[-1] if (k > 1) else True
+            return y > deltas[-1] if (k > 1) else True
         else:
-            return (y > zs[j - 1]) and (y <= zs[j])
+            return (y > deltas[j - 1]) and (y <= deltas[j])
 
     qj = np.zeros(k)
     for j in range(k):
-        qj[j] = sum(theoretical_probs[y] for y in theoretical_probs if in_interval(y, j))
+        qj[j] = sum(theoretical_probs[y] for y in theoretical_probs if at_delta(y, j))
 
     # Вычисление статистики R_0
     R0 = sum(((nj[j] - n * qj[j])**2) / (n * qj[j]) for j in range(k))
 
-    #гипотеза - распределение не совпадает с тем, что мы вычисляем
-    # Ввод уровня значимости α
     while True:
         try:
             alpha = float(input("Введите уровень значимости α, 0 < α < 1: "))
@@ -210,17 +206,19 @@ def main():
         except ValueError:
             print("Некорректный ввод")
 
-    # Для χ²-критерия:
     # Число степеней свободы: r = k - 1
     r = k - 1
     
     # p-value = Fχ²_r(R0), где Fχ²_r - функция распределения χ² с r степенями свободы
     p_value = chi2.cdf(R0, r)
+    
+    
+    # гипотеза H0: предполагаем, что распределение не совпадает с выборочным
 
     # Вывод результатов проверки гипотезы
     print("\nПроверка гипотезы χ²:")
     print(f"Число интервалов k = {k}")
-    print(f"Границы интервалов: {zs}")
+    print(f"Границы интервалов: {deltas}")
     print("qj:", qj)
     print("nj:", nj)
     print(f"Статистика R_0 = {R0:.4f}")
@@ -230,7 +228,6 @@ def main():
         print(f"p-value < α, отвергаем гипотезу H_0.")
     else:
         print(f"p-value >= α, нет оснований отвергать гипотезу H_0.")
-
 
 
 
